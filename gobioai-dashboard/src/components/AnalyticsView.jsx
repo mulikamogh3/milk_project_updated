@@ -15,7 +15,7 @@ export default function AnalyticsView() {
     const fetchHistory = async () => {
       try {
         // Fetch the last 50 data points from the new endpoint
-        const response = await axios.get('http://127.0.0.1:8000/device/history');
+        const response = await axios.get('https://gobio-platform-cloud-h59g.onrender.com/device/history');
         setHistory(response.data);
         setError(false);
       } catch (err) {

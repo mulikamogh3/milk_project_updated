@@ -13,7 +13,7 @@ export default function LiveDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:8000/device/live');
+        const response = await axios.get('https://gobio-platform-cloud-h59g.onrender.com/device/live');
         setSensorData(response.data);
         setError(false);
       } catch (err) {
@@ -34,8 +34,8 @@ export default function LiveDashboard() {
     const fetchPredictions = async () => {
       try {
         // Send the current sensor state to the AI endpoints
-        const anomalyRes = await axios.post('http://127.0.0.1:8000/prediction/anomaly', sensorData);
-        const heatingRes = await axios.post('http://127.0.0.1:8000/prediction/heating', sensorData);
+        const anomalyRes = await axios.post('https://gobio-platform-cloud-h59g.onrender.com/prediction/anomaly', sensorData);
+        const heatingRes = await axios.post('https://gobio-platform-cloud-h59g.onrender.com/prediction/heating', sensorData);
         
         setAiPredictions({
           anomaly: anomalyRes.data.anomaly_detected,
@@ -50,7 +50,15 @@ export default function LiveDashboard() {
   }, [sensorData]); // This triggers every time sensorData changes
 
   if (error) return <div className="p-8 text-xl font-bold text-red-500 flex items-center justify-center h-full">Error connecting to backend API. Is FastAPI running?</div>;
-  if (!sensorData) return <div className="p-8 text-xl font-bold text-blue-400 flex items-center justify-center h-full animate-pulse">Connecting to GoBioAI Pasteurizer...</div>;
+  // Check if the data is empty or hasn't loaded yet
+  if (!sensorData || Object.keys(sensorData).length === 0) {
+    return (
+      <div style={{ padding: "50px", textAlign: "center", color: "white" }}>
+        <h2>🔌 GoBioAI System Online</h2>
+        <p>Waiting for the ESP32 hardware to transmit the first sensor payload...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto animate-in fade-in duration-500 pb-10">
