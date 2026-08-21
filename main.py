@@ -6,6 +6,16 @@ from database import engine
 import models
 from routers import device
 from routers import prediction
+from pydantic import BaseModel
+
+# Import your newly created logic engine!
+from services.industrial_logic import check_industrial_safety_override, calculate_heater_decision
+
+class SensorPayload(BaseModel):
+    temperature: float
+    voltage: float
+    power: float
+    target_temperature: float = 72.0
 
 # Safely create tables during startup
 @asynccontextmanager
@@ -44,6 +54,38 @@ async def log_requests(request: Request, call_next):
 def ping():
     return {"status": "OK"}
 
+@app.post("/device/data")
+def receive_device_data(payload: SensorPayload):
+    # Step 1: Save data to PostgreSQL here...
+    
+    # Step 2: Run the Industrial Safety Check first!
+    # Passing a dict because check_industrial_safety_override expects a dictionary
+    safety_action = check_industrial_safety_override({
+        "temperature": payload.temperature,
+        "voltage": payload.voltage,
+        "power": payload.power
+    })
+    
+    override_needed = safety_action is not None
+    
+    if override_needed:
+        # Instantly return the emergency shutoff command to the ESP32
+        return {
+            "status": "safety_override_active",
+            "command": safety_action 
+        }
+
+    # Step 3: If safe, calculate the normal heating/cooling decision
+    normal_action = calculate_heater_decision(
+        temperature=payload.temperature,
+        target_temperature=payload.target_temperature
+    )
+
+    # Step 4: Send the calculated instructions back to the hardware
+    return {
+        "status": "success",
+        "command": normal_action
+    }
 
 app.include_router(device.router)
 app.include_router(prediction.router)
