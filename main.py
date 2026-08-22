@@ -6,6 +6,7 @@ from database import engine
 import models
 from routers import device
 from routers import prediction
+from routers import commands
 from pydantic import BaseModel
 
 # Import your newly created logic engine!
@@ -89,6 +90,7 @@ def receive_device_data(payload: SensorPayload):
 
 app.include_router(device.router)
 app.include_router(prediction.router)
+app.include_router(commands.router)
 
 @app.get("/")
 def read_root():

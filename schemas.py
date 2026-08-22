@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 
 class DeviceBase(BaseModel):
     machine_id: str
@@ -83,3 +83,29 @@ class AutoCommand(DeviceBase):
     recipe_name: str
     target_temperature: float
     holding_time_sec: int
+
+class RecipeParameters(BaseModel):
+    target_temperature: float = Field(..., ge=0, le=100)
+    cool_temperature: float = Field(..., ge=0, le=50)
+    hold_time_minutes: int = Field(..., ge=0, le=60)
+    hysteresis: float = Field(default=1.0)
+
+class CommandCreateSchema(BaseModel):
+    command: str # e.g., AUTO_START, SET_RECIPE
+    parameters: Optional[Dict[str, Any]] = {}
+
+class CommandResponseSchema(BaseModel):
+    command_id: str
+    machine_id: str
+    command: str
+    status: str
+    created_at: datetime
+
+class CommandResultSchema(BaseModel):
+    machine_id: str
+    command_id: str
+    command: str
+    status: str # EXECUTED, REJECTED
+    process_state: Optional[str] = None
+    auto_running: Optional[bool] = None
+    reason: Optional[str] = None
