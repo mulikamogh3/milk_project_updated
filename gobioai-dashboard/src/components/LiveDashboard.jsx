@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Thermometer, Zap, Wifi, Clock, Power, BrainCircuit, ShieldCheck, AlertTriangle, Send, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
-const API_BASE = 'https://gobio-platform-cloud-h59g.onrender.com';
-const WS_BASE = 'wss://gobio-platform-cloud-h59g.onrender.com';
+const API_BASE = 'https://gobio-platform-cloud-1-028e.onrender.com';
+const WS_BASE = 'wss://gobio-platform-cloud-1-028e.onrender.com';
 const MACHINE_ID = 'ESP32_Pasteurizer_01'; // The strict machine ID from the requirements
 
 export default function LiveDashboard() {
