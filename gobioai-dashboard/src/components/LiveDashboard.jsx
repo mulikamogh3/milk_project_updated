@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Thermometer, Zap, Wifi, Clock, Power, BrainCircuit, ShieldCheck, AlertTriangle, Send, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
-const API_BASE = 'https://gobio-platform-cloud-1-028e.onrender.com';
-const WS_BASE = 'wss://gobio-platform-cloud-1-028e.onrender.com';
+const API_BASE = 'https://milk-project-updated-1.onrender.com';
+const WS_BASE = 'wss://milk-project-updated-1.onrender.com';
 const MACHINE_ID = 'ESP32_Pasteurizer_01'; // The strict machine ID from the requirements
 
 export default function LiveDashboard() {
@@ -19,7 +19,7 @@ export default function LiveDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/device/live`);
+        const response = await axios.get('https://milk-project-updated-1.onrender.com/device/live');
         setSensorData(response.data);
         setError(false);
       } catch (err) {
@@ -37,8 +37,8 @@ export default function LiveDashboard() {
     if (!sensorData || Object.keys(sensorData).length === 0) return;
     const fetchPredictions = async () => {
       try {
-        const anomalyRes = await axios.post(`${API_BASE}/prediction/anomaly`, sensorData);
-        const heatingRes = await axios.post(`${API_BASE}/prediction/heating`, sensorData);
+        const anomalyRes = await axios.post('https://milk-project-updated-1.onrender.com/prediction/anomaly', sensorData);
+        const heatingRes = await axios.post('https://milk-project-updated-1.onrender.com/prediction/heating', sensorData);
         setAiPredictions({ anomaly: anomalyRes.data.anomaly_detected, heater_prediction: heatingRes.data.prediction });
       } catch (err) {
         console.error("AI Prediction Error:", err);

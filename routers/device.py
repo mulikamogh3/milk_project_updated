@@ -4,7 +4,7 @@ from datetime import datetime
 import schemas
 import models
 from database import get_db
-from services.industrial_logic import calculate_heater_decision
+from services.industrial_logic import calculate_heater_decision, check_industrial_safety_override
 
 router = APIRouter(
     prefix="/device",
@@ -15,8 +15,7 @@ router = APIRouter(
 @router.post("/data")
 def receive_sensor_data(payload: schemas.LiveData, db: Session = Depends(get_db)):
     
-    # 1. Convert the massive Pydantic payload into a dictionary
-    # We exclude fields that exist in the JSON but not in our models.py database table
+    # 1. Save to Database
     data_dict = payload.model_dump(exclude={
         'type', 'machine_name', 'serial_number', 'firmware_version', 
         'hardware_version', 'wifi_ssid', 'wifi_rssi', 'server_connected', 
@@ -25,19 +24,38 @@ def receive_sensor_data(payload: schemas.LiveData, db: Session = Depends(get_db)
         'cooler_on_temperature', 'cooler_off_temperature'
     })
     
-    # 2. The timestamp is now auto-parsed into a DateTime object by Pydantic
-    # We just need to handle the case where it might be missing (None)
     data_dict['timestamp'] = payload.timestamp if payload.timestamp else datetime.utcnow()
-
-    # 3. The Magic Trick: **data_dict automatically maps all 30 remaining fields into the database!
     new_data = models.SensorData(**data_dict)
     
     db.add(new_data)
     db.commit()
     db.refresh(new_data)
-    
     print(f"✅ Full Industrial Data saved for {payload.machine_id}: Temp={payload.temperature}°C")
-    return {"status": "success", "message": "Data safely stored in GoBioAI database"}
+    
+    # 2. Run the Industrial Safety Check
+    safety_action = check_industrial_safety_override({
+        "temperature": payload.temperature,
+        "voltage": payload.voltage,
+        "power": payload.power
+    })
+    
+    if safety_action is not None:
+        return {
+            "status": "safety_override_active",
+            "command": safety_action 
+        }
+
+    # 3. If safe, calculate normal AI heating decision
+    normal_action = calculate_heater_decision(
+        temperature=payload.temperature,
+        target_temperature=payload.target_temperature
+    )
+    
+    return {
+        "status": "success", 
+        "message": "Data safely stored in GoBioAI database",
+        "command": normal_action
+    }
 
 # 2. The LIVE API (Fetching from PostgreSQL)
 @router.get("/live")
