@@ -247,8 +247,10 @@ export default function LiveDashboard() {
               ].map(equip => (
                 <div key={equip.name} className={`bg-slate-800 p-6 rounded-lg border ${equip.state ? 'border-green-500/50' : 'border-slate-700'} shadow-lg flex flex-col items-center justify-center transition-all`}>
                   <h3 className="text-slate-400 font-bold uppercase tracking-widest mb-4">{equip.name}</h3>
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors ${equip.state ? 'bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'bg-slate-700'}`}>
-                    <Power className={`w-8 h-8 ${equip.state ? 'text-white' : 'text-slate-900'}`} />
+                  <div 
+                    onClick={() => triggerCommand(equip.state ? `${equip.name}_OFF` : `${equip.name}_ON`)}
+                    className={`cursor-pointer hover:scale-110 w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all duration-300 ${equip.state ? 'bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'bg-slate-700 hover:bg-slate-600'}`}>
+                    <Power className={`w-8 h-8 transition-colors ${equip.state ? 'text-white' : 'text-slate-900'}`} />
                   </div>
                   <div className={`text-2xl font-black ${equip.state ? 'text-green-400' : 'text-slate-600'}`}>
                     {equip.state ? 'ON' : 'OFF'}
