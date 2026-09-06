@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta
 import schemas
 import models
 from database import get_db
@@ -11,96 +11,159 @@ router = APIRouter(
     tags=["IoT Device Endpoints"]
 )
 
-# 1. The Ingestion API (For the ESP32)
+# ==========================================
+# 1. ESP32 Telemetry Ingestion + Command Delivery
+# This is the MAIN entry point for the ESP32.
+# It does 3 things:
+#   (a) Saves the telemetry snapshot to the database
+#   (b) Checks if the ESP32 is acknowledging a past command and updates its status
+#   (c) Fetches any PENDING command for this machine and sends it back as the response
+# ==========================================
 @router.post("/data")
 def receive_sensor_data(payload: schemas.LiveData, db: Session = Depends(get_db)):
-    
-    # 1. Save to Database
-    data_dict = payload.model_dump(exclude={
-        'type', 'machine_name', 'serial_number', 'firmware_version', 
-        'hardware_version', 'wifi_ssid', 'wifi_rssi', 'server_connected', 
-        'last_sync_sec', 'alarm_code', 'alarm_message',
-        'heater_on_temperature', 'heater_off_temperature',
-        'cooler_on_temperature', 'cooler_off_temperature'
-    })
-    
-    data_dict['timestamp'] = payload.timestamp if payload.timestamp else datetime.utcnow()
+
+    # --- (a) Save full telemetry snapshot ---
+    data_dict = payload.model_dump()
+    data_dict['timestamp'] = datetime.utcnow()
     new_data = models.SensorData(**data_dict)
-    
     db.add(new_data)
     db.commit()
     db.refresh(new_data)
-    print(f"✅ Full Industrial Data saved for {payload.machine_id}: Temp={payload.temperature}°C")
-    
-    # 2. Run the Industrial Safety Check
+    print(f"✅ Telemetry saved for {payload.machine_id}: Temp={payload.temperature}°C, State={payload.process_state}")
+
+    # --- (b) Process command acknowledgement from ESP32 ---
+    # The ESP32 includes last_command_id + command_status in every telemetry packet.
+    # If it has executed a command, we update the Command ledger here.
+    if payload.last_command_id and payload.command_status in ["EXECUTED", "REJECTED", "FAILED"]:
+        cmd_record = db.query(models.Command).filter(
+            models.Command.command_id == payload.last_command_id,
+            # Only update if not already finalized to avoid double-writes
+            models.Command.status.notin_(["EXECUTED", "REJECTED", "FAILED"])
+        ).first()
+        if cmd_record:
+            cmd_record.status = payload.command_status
+            cmd_record.executed_at = datetime.utcnow()
+            db.commit()
+            print(f"📋 Command {payload.last_command_id} acknowledged by ESP32 as: {payload.command_status}")
+
+    # --- (c) Check for a pending command to deliver to this ESP32 ---
+    # First, expire any PENDING commands older than 60s that were never picked up
+    # (e.g. leftover from server restarts or test runs)
+    db.query(models.Command).filter(
+        models.Command.machine_id == payload.machine_id,
+        models.Command.status == "PENDING",
+        models.Command.created_at < (datetime.utcnow() - timedelta(seconds=60))
+    ).update({"status": "FAILED", "error_reason": "Expired: not delivered within 60s"})
+    db.commit()
+
+    pending_command = db.query(models.Command).filter(
+        models.Command.machine_id == payload.machine_id,
+        models.Command.status == "PENDING"
+    ).order_by(models.Command.created_at.asc()).first()
+
+    if pending_command:
+        # Mark it as SENT so we don't re-deliver it on the next poll
+        pending_command.status = "SENT"
+        pending_command.sent_at = datetime.utcnow()
+        db.commit()
+        print(f"📤 Dispatching command {pending_command.command_id} ({pending_command.command}) to {payload.machine_id}")
+
+        # Build the command packet the ESP32 expects
+        cmd_packet = {
+            "command_id": pending_command.command_id,
+            "action": pending_command.command,   # e.g. "AUTO_START", "STOP", "EMERGENCY_STOP"
+        }
+        # Merge any extra recipe parameters (target_temperature, hold_time, etc.)
+        if pending_command.parameters:
+            cmd_packet.update(pending_command.parameters)
+
+        return {
+            "status": "success",
+            "message": "Telemetry stored. Command dispatched.",
+            "command": cmd_packet
+        }
+
+    # --- Run safety check for heater decision (no pending command path) ---
     safety_action = check_industrial_safety_override({
         "temperature": payload.temperature,
         "voltage": payload.voltage,
         "power": payload.power
     })
-    
     if safety_action is not None:
         return {
             "status": "safety_override_active",
-            "command": safety_action 
+            "command": safety_action
         }
 
-    # 3. If safe, calculate normal AI heating decision
+    # Normal AI heater decision (no commands, no safety issue)
     normal_action = calculate_heater_decision(
         temperature=payload.temperature,
         target_temperature=payload.target_temperature
     )
-    
+
     return {
-        "status": "success", 
+        "status": "success",
         "message": "Data safely stored in GoBioAI database",
-        "command": normal_action
+        "command": None  # No pending command for ESP32
     }
 
-# 2. The LIVE API (Fetching from PostgreSQL)
+# ==========================================
+# 2. Live Data API (Dashboard reads from here)
+# ==========================================
 @router.get("/live")
 def get_live_data(db: Session = Depends(get_db)):
-    # 1. Fetch the absolute latest row from the vault
     latest_data = db.query(models.SensorData).order_by(models.SensorData.id.desc()).first()
-    
+
     if not latest_data:
         return {}
-        
-    # 2. Dynamically grab ALL 37 columns from the database row
+
     live_dict = {column.name: getattr(latest_data, column.name) for column in latest_data.__table__.columns}
-    
-    # 3. Safely override the heater_status so the React UI doesn't crash, 
-    # while preserving the other 36 columns for the AI models!
-    live_dict["heater_status"] = (latest_data.heater_status == "ON" or latest_data.heater_status is True)
-    
-    # 4. Inject Module 3: AI Heater Decision Engine
+    live_dict.pop("id", None)
+
+    # Convert datetime to ISO string so React can display it
+    if "timestamp" in live_dict and live_dict["timestamp"]:
+        live_dict["timestamp"] = live_dict["timestamp"].isoformat()
+
+    # Inject AI Heater Decision Engine data for the dashboard
     temperature = live_dict.get("temperature", 0.0)
     target_temperature = live_dict.get("target_temperature", 0.0)
     live_dict["heater_decision"] = calculate_heater_decision(temperature, target_temperature)
-    
+
+    # Inject the latest command status so the dashboard knows if a command is in-flight
+    latest_command = db.query(models.Command).filter(
+        models.Command.machine_id == latest_data.machine_id
+    ).order_by(models.Command.created_at.desc()).first()
+
+    if latest_command:
+        live_dict["active_command"] = {
+            "command_id": latest_command.command_id,
+            "command": latest_command.command,
+            "status": latest_command.status,
+        }
+    else:
+        live_dict["active_command"] = None
+
     return live_dict
 
-# 3. The HISTORY API (For the Analytics Charts)
+# ==========================================
+# 3. History API (for Analytics Charts)
+# ==========================================
 @router.get("/history")
 def get_historical_data(limit: int = 50, db: Session = Depends(get_db)):
-    # Fetch the latest X records, ordered by newest first
     records = db.query(models.SensorData).order_by(models.SensorData.id.desc()).limit(limit).all()
-    
+
     if not records:
         return []
-        
-    # Reverse the list so it reads chronologically (oldest -> newest) for the chart
+
     records.reverse()
-    
-    # Format the data cleanly for Recharts
+
     history_data = []
     for r in records:
         history_data.append({
-            # Format time as HH:MM:SS for the X-axis
             "time": r.timestamp.strftime("%H:%M:%S") if r.timestamp else "00:00:00",
             "temperature": round(r.temperature or 0.0, 2),
             "target": round(r.target_temperature or 0.0, 2),
             "power": round(r.power or 0.0, 2)
         })
-        
+
     return history_data

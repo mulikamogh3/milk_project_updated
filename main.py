@@ -15,7 +15,7 @@ from pydantic import BaseModel
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     models.Base.metadata.create_all(bind=engine)
-    print("✅ PostgreSQL GoBioAI Vault connected and tables verified.")
+    print("[OK] PostgreSQL GoBioAI Vault connected and tables verified.")
     yield
 
 app = FastAPI(title="Milk Pasteurization IoT Backend", lifespan=lifespan)
