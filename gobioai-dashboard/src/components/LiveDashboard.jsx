@@ -7,7 +7,7 @@ import { Thermometer, Zap, Clock, Power, ShieldCheck, AlertTriangle, Loader2, Ch
 // ─────────────────────────────────────────────────────────────────────────────
 const API_BASE = 'http://localhost:8000';
 const MACHINE_ID = 'ESP32_Pasteurizer_01';
-const POLL_INTERVAL_MS = 2000; // 2 seconds
+const POLL_INTERVAL_MS = 1000; // 1 second
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STATUS BADGE for active command
@@ -52,6 +52,7 @@ export default function LiveDashboard() {
   const [sensorData, setSensorData]   = useState(null);
   const [error, setError]             = useState(false);
   const [isSending, setIsSending]     = useState(false); // Prevents double-click
+  const [pendingRelay, setPendingRelay] = useState(null);
 
   // Track the ID of the last command WE sent so we can highlight its status
   const lastSentCommandIdRef = useRef(null);
@@ -72,6 +73,7 @@ export default function LiveDashboard() {
           ['EXECUTED', 'REJECTED', 'FAILED'].includes(ac.status)
         ) {
           setIsSending(false);
+          setPendingRelay(null);
         }
       } catch (err) {
         console.error('Error fetching live data:', err);
@@ -86,6 +88,14 @@ export default function LiveDashboard() {
   // ── 2. Send a command to the backend ──────────────────────────────────────
   const triggerCommand = async (commandName, parameters = {}) => {
     if (isSending) return;
+    
+    // 🔒 RELAY LOADING LOCK (Prevents Polling Flicker)
+    if (commandName.endsWith('_ON') || commandName.endsWith('_OFF')) {
+      const relayName = commandName.split('_')[0]; // 'HEATER', 'STIRRER', 'COOLER'
+      setPendingRelay(relayName);
+      setTimeout(() => setPendingRelay(null), 4000); // Auto-unlock if ESP32 doesn't respond
+    }
+
     setIsSending(true);
     lastSentCommandIdRef.current = null;
 
@@ -244,19 +254,24 @@ export default function LiveDashboard() {
                 { name: 'HEATER',  state: sensorData.heater  },
                 { name: 'STIRRER', state: sensorData.stirrer },
                 { name: 'COOLER',  state: sensorData.cooler  }
-              ].map(equip => (
-                <div key={equip.name} className={`bg-slate-800 p-6 rounded-lg border ${equip.state ? 'border-green-500/50' : 'border-slate-700'} shadow-lg flex flex-col items-center justify-center transition-all`}>
+              ].map(equip => {
+                const isPending = pendingRelay === equip.name;
+                return (
+                <div key={equip.name} className={`bg-slate-800 p-6 rounded-lg border ${isPending ? 'border-yellow-500/50' : equip.state ? 'border-green-500/50' : 'border-slate-700'} shadow-lg flex flex-col items-center justify-center transition-all`}>
                   <h3 className="text-slate-400 font-bold uppercase tracking-widest mb-4">{equip.name}</h3>
                   <div 
-                    onClick={() => triggerCommand(equip.state ? `${equip.name}_OFF` : `${equip.name}_ON`)}
-                    className={`cursor-pointer hover:scale-110 w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all duration-300 ${equip.state ? 'bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)]' : 'bg-slate-700 hover:bg-slate-600'}`}>
-                    <Power className={`w-8 h-8 transition-colors ${equip.state ? 'text-white' : 'text-slate-900'}`} />
+                    onClick={() => !isPending && triggerCommand(equip.state ? `${equip.name}_OFF` : `${equip.name}_ON`)}
+                    className={`cursor-pointer w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all duration-300 
+                      ${isPending ? 'bg-yellow-500 animate-pulse text-white hover:scale-100' :
+                        equip.state ? 'bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)] text-white hover:scale-110' : 
+                        'bg-slate-700 hover:bg-slate-600 text-slate-900 hover:scale-110'}`}>
+                    <Power className={`w-8 h-8 transition-colors ${isPending ? 'text-white' : equip.state ? 'text-white' : 'text-slate-900'}`} />
                   </div>
-                  <div className={`text-2xl font-black ${equip.state ? 'text-green-400' : 'text-slate-600'}`}>
-                    {equip.state ? 'ON' : 'OFF'}
+                  <div className={`text-2xl font-black ${isPending ? 'text-yellow-400' : equip.state ? 'text-green-400' : 'text-slate-600'}`}>
+                    {isPending ? 'SENDING...' : equip.state ? 'ON' : 'OFF'}
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
 
             {/* Electrical Telemetry */}
