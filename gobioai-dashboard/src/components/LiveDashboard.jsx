@@ -141,14 +141,18 @@ export default function LiveDashboard() {
     );
   }
 
-  const isOnline = sensorData.online;
+  // ── Compute Data Age (Heartbeat) ──────────────────────────────────────────
+  const timestampStr = sensorData.timestamp ? (sensorData.timestamp.endsWith('Z') ? sensorData.timestamp : `${sensorData.timestamp}Z`) : new Date().toISOString();
+  const isStale = (Date.now() - new Date(timestampStr).getTime()) > 10000;
+  const isOnline = sensorData.online && !isStale;
+  
   const isHolding = sensorData.process_state === 'HOLDING';
   const pipelineStates = ['START', 'HEATING', 'HOLDING', 'COOLING', 'COMPLETE'];
   const activeCommand = sensorData.active_command;
 
   return (
     <div className="min-h-screen bg-slate-900 p-6 font-sans text-slate-200">
-      <div className="max-w-7xl mx-auto flex flex-col gap-6">
+      <div className={`max-w-7xl mx-auto flex flex-col gap-6 transition-all duration-500 ${!isOnline ? 'opacity-50 grayscale' : 'opacity-100'}`}>
 
         {/* ── Top Bar ── */}
         <div className="flex justify-between items-center bg-slate-800 p-6 rounded-lg border-2 border-slate-700 shadow-lg">
