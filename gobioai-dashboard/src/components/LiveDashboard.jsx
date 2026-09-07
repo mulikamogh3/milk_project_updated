@@ -353,16 +353,23 @@ export default function LiveDashboard() {
             Pasteurization Method
           </h3>
           <div className="flex flex-wrap gap-4 mb-4">
-            {['LTLT', 'HTST', 'CUSTOM'].map(method => (
+            {[
+              { id: 'LTLT', label: '63°C / 30 sec (TEST)' },
+              { id: 'HTST', label: '72°C / 15 sec' },
+              { id: 'CUSTOM', label: 'User-defined inputs' }
+            ].map(method => (
               <button 
-                key={method}
-                onClick={() => setSelectedMethod(method)}
-                className={`px-6 py-3 rounded font-bold uppercase tracking-wider transition-all border-2
-                  ${selectedMethod === method 
+                key={method.id}
+                onClick={() => setSelectedMethod(method.id)}
+                className={`px-6 py-3 rounded font-bold uppercase tracking-wider transition-all border-2 flex flex-col items-center gap-1
+                  ${selectedMethod === method.id 
                     ? 'bg-blue-600 text-white border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.4)]' 
                     : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'}`}
               >
-                {method}
+                <span>{method.id}</span>
+                <span className={`text-xs normal-case tracking-normal ${selectedMethod === method.id ? 'text-blue-200' : 'text-slate-500'}`}>
+                  {method.label}
+                </span>
               </button>
             ))}
           </div>
