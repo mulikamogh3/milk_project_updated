@@ -14,6 +14,7 @@ class LiveData(BaseModel):
     temperature: float = 0.0
     target_temperature: float = 0.0
     cooling_temperature: float = 0.0
+    max_temperature: float = 0.0
     
     holding_time_sec: int = 0
     holding_elapsed_sec: int = 0
@@ -52,6 +53,14 @@ class AutoCommand(DeviceBase):
     recipe_name: str
     target_temperature: float
     holding_time_sec: int
+
+class StartPasteurizationPayload(DeviceBase):
+    command: str = Field(default="START_PASTEURIZATION")
+    method: str = Field(..., description="LTLT, HTST, or CUSTOM")
+    target_temperature: float = Field(..., ge=0.0, le=100.0)
+    holding_time_sec: int = Field(..., ge=0)
+    cooling_temperature: float = Field(..., ge=0.0, le=100.0)
+    max_temperature: float = Field(..., ge=0.0, le=120.0)
 
 class RecipeParameters(BaseModel):
     target_temperature: float = Field(..., ge=0, le=100)

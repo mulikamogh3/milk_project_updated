@@ -21,6 +21,8 @@ class SensorData(Base):
     holding_elapsed_sec = Column(Integer)
     holding_remaining_sec = Column(Integer)
     
+    max_temperature = Column(Float)
+    
     heater = Column(Boolean)
     stirrer = Column(Boolean)
     cooler = Column(Boolean)
@@ -86,6 +88,7 @@ class Command(Base):
     command_id = Column(String, unique=True, index=True) # e.g., CMD_10025
     machine_id = Column(String, index=True)
     command = Column(String) # e.g., AUTO_START, SET_RECIPE
+    method = Column(String, nullable=True) # LTLT, HTST, CUSTOM
     parameters = Column(JSON, default={})
     status = Column(String, default="CREATED") # CREATED, PENDING, SENT, EXECUTED, FAILED
     error_reason = Column(String, nullable=True)
@@ -94,3 +97,16 @@ class Command(Base):
     sent_at = Column(DateTime, nullable=True)
     received_at = Column(DateTime, nullable=True)
     executed_at = Column(DateTime, nullable=True)
+
+class PasteurizationBatch(Base):
+    __tablename__ = "pasteurization_batches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(String, unique=True, index=True)
+    machine_id = Column(String, index=True)
+    method = Column(String) # LTLT, HTST, CUSTOM
+    start_time = Column(DateTime, default=datetime.datetime.utcnow)
+    end_time = Column(DateTime, nullable=True)
+    final_heating_temp = Column(Float, nullable=True)
+    final_cooling_temp = Column(Float, nullable=True)
+    status = Column(String, default="IN_PROGRESS") # IN_PROGRESS, COMPLETED, FAILED

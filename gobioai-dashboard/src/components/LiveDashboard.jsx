@@ -54,6 +54,20 @@ export default function LiveDashboard() {
   const [isSending, setIsSending]     = useState(false); // Prevents double-click
   const [pendingRelay, setPendingRelay] = useState(null);
 
+  // Phase 3: Pasteurization Method Selection
+  const [selectedMethod, setSelectedMethod] = useState('HTST');
+  const [customRecipe, setCustomRecipe] = useState({
+    target_temperature: 72.0,
+    holding_time_sec: 15,
+    cooling_temperature: 35.0,
+    max_temperature: 95.0
+  });
+
+  const recipes = {
+    LTLT: { target_temperature: 63.0, holding_time_sec: 1800, cooling_temperature: 35.0, max_temperature: 95.0 },
+    HTST: { target_temperature: 72.0, holding_time_sec: 15, cooling_temperature: 35.0, max_temperature: 95.0 }
+  };
+
   // Track the ID of the last command WE sent so we can highlight its status
   const lastSentCommandIdRef = useRef(null);
 
@@ -109,6 +123,33 @@ export default function LiveDashboard() {
       // isSending will be cleared when the polling loop sees EXECUTED/REJECTED/FAILED
     } catch (err) {
       console.error('Failed to send command:', err);
+      setIsSending(false);
+    }
+  };
+
+  const handleAutoStart = async () => {
+    if (isSending) return;
+    setIsSending(true);
+    lastSentCommandIdRef.current = null;
+
+    const recipe = selectedMethod === 'CUSTOM' ? customRecipe : recipes[selectedMethod];
+    
+    const payload = {
+        machine_id: MACHINE_ID,
+        command: "START_PASTEURIZATION",
+        method: selectedMethod,
+        target_temperature: Number(recipe.target_temperature),
+        holding_time_sec: Number(recipe.holding_time_sec),
+        cooling_temperature: Number(recipe.cooling_temperature),
+        max_temperature: Number(recipe.max_temperature)
+    };
+
+    try {
+      const response = await axios.post(`${API_BASE}/device/command`, payload);
+      lastSentCommandIdRef.current = response.data.command_id;
+      console.log(`✅ Command queued: ${response.data.command_id} (START_PASTEURIZATION)`);
+    } catch (err) {
+      console.error('Failed to send auto start command:', err);
       setIsSending(false);
     }
   };
@@ -305,6 +346,49 @@ export default function LiveDashboard() {
           </div>
         </div>
 
+        {/* ── Pasteurization Method Selector ── */}
+        <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-lg">
+          <h3 className="text-slate-400 font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
+            <Radio className="w-5 h-5 text-blue-500" />
+            Pasteurization Method
+          </h3>
+          <div className="flex flex-wrap gap-4 mb-4">
+            {['LTLT', 'HTST', 'CUSTOM'].map(method => (
+              <button 
+                key={method}
+                onClick={() => setSelectedMethod(method)}
+                className={`px-6 py-3 rounded font-bold uppercase tracking-wider transition-all border-2
+                  ${selectedMethod === method 
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.4)]' 
+                    : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'}`}
+              >
+                {method}
+              </button>
+            ))}
+          </div>
+          
+          {selectedMethod === 'CUSTOM' && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-900 p-4 rounded border border-slate-700">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Target Temp (°C)</label>
+                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.target_temperature} onChange={e => setCustomRecipe({...customRecipe, target_temperature: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Hold Time (sec)</label>
+                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.holding_time_sec} onChange={e => setCustomRecipe({...customRecipe, holding_time_sec: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Cool Temp (°C)</label>
+                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.cooling_temperature} onChange={e => setCustomRecipe({...customRecipe, cooling_temperature: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Max Temp (°C)</label>
+                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.max_temperature} onChange={e => setCustomRecipe({...customRecipe, max_temperature: e.target.value})} />
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* ── Bottom: Control Panel & Alarms ── */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3 bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-lg">
@@ -316,11 +400,11 @@ export default function LiveDashboard() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <button
                 id="btn-auto-start"
-                onClick={() => triggerCommand('AUTO_START', { target_temperature: 72.0, hold_time: 15, cool_temperature: 35.0 })}
+                onClick={handleAutoStart}
                 disabled={isSending}
-                className="w-full bg-green-700 hover:bg-green-600 disabled:bg-slate-700 disabled:cursor-not-allowed text-white py-4 rounded font-bold uppercase tracking-wider transition-colors"
+                className="w-full bg-green-700 hover:bg-green-600 disabled:bg-slate-700 disabled:cursor-not-allowed text-white py-4 rounded font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2"
               >
-                Auto Start
+                {isSending ? <><Loader2 className="w-5 h-5 animate-spin" /> SENDING...</> : 'Auto Start'}
               </button>
               <button
                 id="btn-manual"

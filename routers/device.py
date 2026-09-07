@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
+import uuid
 import schemas
 import models
 from database import get_db
@@ -10,6 +11,43 @@ router = APIRouter(
     prefix="/device",
     tags=["IoT Device Endpoints"]
 )
+
+# ==========================================
+# 1. UI Command Intake (React -> Backend)
+# ==========================================
+@router.post("/command")
+def receive_ui_command(payload: schemas.StartPasteurizationPayload, db: Session = Depends(get_db)):
+    date_str = datetime.utcnow().strftime("%Y%m%d")
+    unique_suffix = str(uuid.uuid4().hex)[:4].upper()
+    cmd_id = f"CMD_{date_str}_{unique_suffix}"
+    
+    params = {
+        "target_temperature": payload.target_temperature,
+        "holding_time_sec": payload.holding_time_sec,
+        "cooling_temperature": payload.cooling_temperature,
+        "max_temperature": payload.max_temperature
+    }
+    
+    new_cmd = models.Command(
+        command_id=cmd_id,
+        machine_id=payload.machine_id,
+        command=payload.command,
+        method=payload.method,
+        parameters=params,
+        status="PENDING",
+        created_at=datetime.utcnow()
+    )
+    
+    db.add(new_cmd)
+    db.commit()
+    
+    print(f"📥 Command queued: {cmd_id} ({payload.command} - {payload.method}) for machine {payload.machine_id}")
+    
+    return {
+        "status": "success",
+        "message": "Command queued successfully",
+        "command_id": cmd_id
+    }
 
 # ==========================================
 # 1. ESP32 Telemetry Ingestion + Command Delivery
@@ -71,7 +109,8 @@ def receive_sensor_data(payload: schemas.LiveData, db: Session = Depends(get_db)
         # Build the command packet the ESP32 expects
         cmd_packet = {
             "command_id": pending_command.command_id,
-            "action": pending_command.command,   # e.g. "AUTO_START", "STOP", "EMERGENCY_STOP"
+            "action": pending_command.command,   # e.g. "START_PASTEURIZATION"
+            "method": pending_command.method,
         }
         # Merge any extra recipe parameters (target_temperature, hold_time, etc.)
         if pending_command.parameters:
