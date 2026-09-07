@@ -16,21 +16,21 @@ function CommandStatusBadge({ activeCommand }) {
   if (!activeCommand) return null;
 
   const statusStyles = {
-    PENDING:  'bg-yellow-900/40 text-yellow-400 border-yellow-500/50',
-    SENT:     'bg-blue-900/40  text-blue-400   border-blue-500/50',
+    PENDING: 'bg-yellow-900/40 text-yellow-400 border-yellow-500/50',
+    SENT: 'bg-blue-900/40  text-blue-400   border-blue-500/50',
     EXECUTED: 'bg-green-900/40 text-green-400  border-green-500/50',
     REJECTED: 'bg-red-900/40   text-red-400    border-red-500/50',
-    FAILED:   'bg-red-900/40   text-red-400    border-red-500/50',
+    FAILED: 'bg-red-900/40   text-red-400    border-red-500/50',
   };
   const statusIcons = {
-    PENDING:  <Radio className="w-4 h-4 animate-pulse" />,
-    SENT:     <Radio className="w-4 h-4 animate-pulse" />,
+    PENDING: <Radio className="w-4 h-4 animate-pulse" />,
+    SENT: <Radio className="w-4 h-4 animate-pulse" />,
     EXECUTED: <CheckCircle2 className="w-4 h-4" />,
     REJECTED: <XCircle className="w-4 h-4" />,
-    FAILED:   <XCircle className="w-4 h-4" />,
+    FAILED: <XCircle className="w-4 h-4" />,
   };
   const style = statusStyles[activeCommand.status] || statusStyles.PENDING;
-  const icon  = statusIcons[activeCommand.status]  || statusIcons.PENDING;
+  const icon = statusIcons[activeCommand.status] || statusIcons.PENDING;
 
   return (
     <div className={`mt-4 flex items-center justify-between bg-slate-900 p-3 rounded border ${style} text-sm`}>
@@ -49,9 +49,9 @@ function CommandStatusBadge({ activeCommand }) {
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LiveDashboard() {
-  const [sensorData, setSensorData]   = useState(null);
-  const [error, setError]             = useState(false);
-  const [isSending, setIsSending]     = useState(false); // Prevents double-click
+  const [sensorData, setSensorData] = useState(null);
+  const [error, setError] = useState(false);
+  const [isSending, setIsSending] = useState(false); // Prevents double-click
   const [pendingRelay, setPendingRelay] = useState(null);
 
   // Phase 3: Pasteurization Method Selection
@@ -64,7 +64,7 @@ export default function LiveDashboard() {
   });
 
   const recipes = {
-    LTLT: { target_temperature: 63.0, holding_time_sec: 1800, cooling_temperature: 35.0, max_temperature: 95.0 },
+    LTLT: { target_temperature: 63.0, holding_time_sec: 30, cooling_temperature: 35.0, max_temperature: 95.0 },
     HTST: { target_temperature: 72.0, holding_time_sec: 15, cooling_temperature: 35.0, max_temperature: 95.0 }
   };
 
@@ -102,7 +102,7 @@ export default function LiveDashboard() {
   // ── 2. Send a command to the backend ──────────────────────────────────────
   const triggerCommand = async (commandName, parameters = {}) => {
     if (isSending) return;
-    
+
     // 🔒 RELAY LOADING LOCK (Prevents Polling Flicker)
     if (commandName.endsWith('_ON') || commandName.endsWith('_OFF')) {
       const relayName = commandName.split('_')[0]; // 'HEATER', 'STIRRER', 'COOLER'
@@ -133,15 +133,15 @@ export default function LiveDashboard() {
     lastSentCommandIdRef.current = null;
 
     const recipe = selectedMethod === 'CUSTOM' ? customRecipe : recipes[selectedMethod];
-    
+
     const payload = {
-        machine_id: MACHINE_ID,
-        command: "START_PASTEURIZATION",
-        method: selectedMethod,
-        target_temperature: Number(recipe.target_temperature),
-        holding_time_sec: Number(recipe.holding_time_sec),
-        cooling_temperature: Number(recipe.cooling_temperature),
-        max_temperature: Number(recipe.max_temperature)
+      machine_id: MACHINE_ID,
+      command: "START_PASTEURIZATION",
+      method: selectedMethod,
+      target_temperature: Number(recipe.target_temperature),
+      holding_time_sec: Number(recipe.holding_time_sec),
+      cooling_temperature: Number(recipe.cooling_temperature),
+      max_temperature: Number(recipe.max_temperature)
     };
 
     try {
@@ -186,7 +186,7 @@ export default function LiveDashboard() {
   const timestampStr = sensorData.timestamp ? (sensorData.timestamp.endsWith('Z') ? sensorData.timestamp : `${sensorData.timestamp}Z`) : new Date().toISOString();
   const isStale = (Date.now() - new Date(timestampStr).getTime()) > 10000;
   const isOnline = sensorData.online && !isStale;
-  
+
   const isHolding = sensorData.process_state === 'HOLDING';
   const pipelineStates = ['START', 'HEATING', 'HOLDING', 'COOLING', 'COMPLETE'];
   const activeCommand = sensorData.active_command;
@@ -296,27 +296,28 @@ export default function LiveDashboard() {
           <div className="lg:col-span-2 flex flex-col gap-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {[
-                { name: 'HEATER',  state: sensorData.heater  },
+                { name: 'HEATER', state: sensorData.heater },
                 { name: 'STIRRER', state: sensorData.stirrer },
-                { name: 'COOLER',  state: sensorData.cooler  }
+                { name: 'COOLER', state: sensorData.cooler }
               ].map(equip => {
                 const isPending = pendingRelay === equip.name;
                 return (
-                <div key={equip.name} className={`bg-slate-800 p-6 rounded-lg border ${isPending ? 'border-yellow-500/50' : equip.state ? 'border-green-500/50' : 'border-slate-700'} shadow-lg flex flex-col items-center justify-center transition-all`}>
-                  <h3 className="text-slate-400 font-bold uppercase tracking-widest mb-4">{equip.name}</h3>
-                  <div 
-                    onClick={() => !isPending && triggerCommand(equip.state ? `${equip.name}_OFF` : `${equip.name}_ON`)}
-                    className={`cursor-pointer w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all duration-300 
+                  <div key={equip.name} className={`bg-slate-800 p-6 rounded-lg border ${isPending ? 'border-yellow-500/50' : equip.state ? 'border-green-500/50' : 'border-slate-700'} shadow-lg flex flex-col items-center justify-center transition-all`}>
+                    <h3 className="text-slate-400 font-bold uppercase tracking-widest mb-4">{equip.name}</h3>
+                    <div
+                      onClick={() => !isPending && triggerCommand(equip.state ? `${equip.name}_OFF` : `${equip.name}_ON`)}
+                      className={`cursor-pointer w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all duration-300 
                       ${isPending ? 'bg-yellow-500 animate-pulse text-white hover:scale-100' :
-                        equip.state ? 'bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)] text-white hover:scale-110' : 
-                        'bg-slate-700 hover:bg-slate-600 text-slate-900 hover:scale-110'}`}>
-                    <Power className={`w-8 h-8 transition-colors ${isPending ? 'text-white' : equip.state ? 'text-white' : 'text-slate-900'}`} />
+                          equip.state ? 'bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.4)] text-white hover:scale-110' :
+                            'bg-slate-700 hover:bg-slate-600 text-slate-900 hover:scale-110'}`}>
+                      <Power className={`w-8 h-8 transition-colors ${isPending ? 'text-white' : equip.state ? 'text-white' : 'text-slate-900'}`} />
+                    </div>
+                    <div className={`text-2xl font-black ${isPending ? 'text-yellow-400' : equip.state ? 'text-green-400' : 'text-slate-600'}`}>
+                      {isPending ? 'SENDING...' : equip.state ? 'ON' : 'OFF'}
+                    </div>
                   </div>
-                  <div className={`text-2xl font-black ${isPending ? 'text-yellow-400' : equip.state ? 'text-green-400' : 'text-slate-600'}`}>
-                    {isPending ? 'SENDING...' : equip.state ? 'ON' : 'OFF'}
-                  </div>
-                </div>
-              )})}
+                )
+              })}
             </div>
 
             {/* Electrical Telemetry */}
@@ -327,12 +328,12 @@ export default function LiveDashboard() {
               </h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 {[
-                  { label: 'VOLTAGE', val: (sensorData.voltage      || 0).toFixed(1),  unit: 'V'   },
-                  { label: 'CURRENT', val: (sensorData.current      || 0).toFixed(2),  unit: 'A'   },
-                  { label: 'POWER',   val: (sensorData.power        || 0).toFixed(1),  unit: 'W'   },
-                  { label: 'ENERGY',  val: (sensorData.energy       || 0).toFixed(3),  unit: 'kWh' },
-                  { label: 'FREQ',    val: (sensorData.frequency    || 0).toFixed(1),  unit: 'Hz'  },
-                  { label: 'PF',      val: (sensorData.power_factor || 0).toFixed(2),  unit: ''    }
+                  { label: 'VOLTAGE', val: (sensorData.voltage || 0).toFixed(1), unit: 'V' },
+                  { label: 'CURRENT', val: (sensorData.current || 0).toFixed(2), unit: 'A' },
+                  { label: 'POWER', val: (sensorData.power || 0).toFixed(1), unit: 'W' },
+                  { label: 'ENERGY', val: (sensorData.energy || 0).toFixed(3), unit: 'kWh' },
+                  { label: 'FREQ', val: (sensorData.frequency || 0).toFixed(1), unit: 'Hz' },
+                  { label: 'PF', val: (sensorData.power_factor || 0).toFixed(2), unit: '' }
                 ].map(metric => (
                   <div key={metric.label} className="bg-slate-900 p-3 rounded border border-slate-800 text-center">
                     <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{metric.label}</div>
@@ -353,44 +354,37 @@ export default function LiveDashboard() {
             Pasteurization Method
           </h3>
           <div className="flex flex-wrap gap-4 mb-4">
-            {[
-              { id: 'LTLT', label: '63°C / 30 sec (TEST)' },
-              { id: 'HTST', label: '72°C / 15 sec' },
-              { id: 'CUSTOM', label: 'User-defined inputs' }
-            ].map(method => (
-              <button 
-                key={method.id}
-                onClick={() => setSelectedMethod(method.id)}
-                className={`px-6 py-3 rounded font-bold uppercase tracking-wider transition-all border-2 flex flex-col items-center gap-1
-                  ${selectedMethod === method.id 
-                    ? 'bg-blue-600 text-white border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.4)]' 
+            {['LTLT', 'HTST', 'CUSTOM'].map(method => (
+              <button
+                key={method}
+                onClick={() => setSelectedMethod(method)}
+                className={`px-6 py-3 rounded font-bold uppercase tracking-wider transition-all border-2
+                  ${selectedMethod === method
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.4)]'
                     : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'}`}
               >
-                <span>{method.id}</span>
-                <span className={`text-xs normal-case tracking-normal ${selectedMethod === method.id ? 'text-blue-200' : 'text-slate-500'}`}>
-                  {method.label}
-                </span>
+                {method}
               </button>
             ))}
           </div>
-          
+
           {selectedMethod === 'CUSTOM' && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-900 p-4 rounded border border-slate-700">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Target Temp (°C)</label>
-                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.target_temperature} onChange={e => setCustomRecipe({...customRecipe, target_temperature: e.target.value})} />
+                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.target_temperature} onChange={e => setCustomRecipe({ ...customRecipe, target_temperature: e.target.value })} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Hold Time (sec)</label>
-                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.holding_time_sec} onChange={e => setCustomRecipe({...customRecipe, holding_time_sec: e.target.value})} />
+                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.holding_time_sec} onChange={e => setCustomRecipe({ ...customRecipe, holding_time_sec: e.target.value })} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Cool Temp (°C)</label>
-                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.cooling_temperature} onChange={e => setCustomRecipe({...customRecipe, cooling_temperature: e.target.value})} />
+                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.cooling_temperature} onChange={e => setCustomRecipe({ ...customRecipe, cooling_temperature: e.target.value })} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Max Temp (°C)</label>
-                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.max_temperature} onChange={e => setCustomRecipe({...customRecipe, max_temperature: e.target.value})} />
+                <input type="number" className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white" value={customRecipe.max_temperature} onChange={e => setCustomRecipe({ ...customRecipe, max_temperature: e.target.value })} />
               </div>
             </div>
           )}
